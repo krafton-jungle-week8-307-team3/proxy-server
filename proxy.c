@@ -69,7 +69,14 @@ int main(int argc, char **argv) {
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
-    pthread_t tid;
+    pthread_t tid; 
+    /*
+     *===============================================================
+     * -csapp.h 에 정의되어 있음
+     * -POSIX 스레드 라이브러리에서 스레드를 식별하는데 쓰이는 식별자 타입
+     * -이 타입은 스레드를 생성할 때 반환되는 ID를 저장하는데 사용됨
+     *=============================================================== 
+    */
     if (argc != 2)
     {
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
@@ -88,23 +95,45 @@ int main(int argc, char **argv) {
         - main은 다시 while문의 처음으로 돌아가 새로운 연결 wait
 
         - 이때의 각 스레드는 모두 각각의 connfd(연결)를 가져야 하기 때문에
-        - 연결마다 '메모리를 할당' 하여 포인팅한다.
+        - 연결마다 '메모리를 할당' 하여 포인팅한다. malloc 할당 해주기 
         
         ======================================================
         */
         clientlen = sizeof(clientaddr);
-        //int *connfdp = Malloc(sizeof(int));
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
+        int *connfdp = Malloc(sizeof(int));
+        //connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
+        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
         Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
-        doit(connfd);
-        Close(connfd);
-        //Pthread_create(&tid,NULL,thread_routine,connfdp);
+        //doit(connfd);
+        //Close(connfd);
+        Pthread_create(&tid,NULL,thread_routine,connfdp);
+        // 새 쓰레드 생성 thread_routine() 함수에서 연결 처리 해준다
+        // 인자로 넘기는건  connfdp (할당한 소켓 fd 포인터)
     }
 
   printf("%s", user_agent_hdr);
   return 0;
 
+}
+
+void *thread_routine(void *connfdp){
+  /*
+  =========================================================================
+  - 각 스레드별 connfd는 입력으로 가져온 connfdp가 가리키던 할당된 위치의 fd값
+  - 스레드 종료시 자원을 반납하고 
+  - connfdp도 이미 connfd를 얻어 역할을 다했으니 반납해 주어야 한다.
+  =========================================================================
+  
+  */
+
+ int connfd = *((int *) connfdp);
+ Pthread_detach(pthread_self());
+
+ Free(connfdp); // malloc 으로 메모리 할당해준거 free해주기
+ doit(connfd); // 프록시에서 일단 tiny 서버로 보내주기 !
+ Close(connfd); // 연결 종료 시켜주기 
+ return NULL; 
 }
 
 
